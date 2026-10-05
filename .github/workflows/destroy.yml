@@ -1,0 +1,47 @@
+# Workflow manual que destruye toda la infraestructura de Terraform.
+name: Destroy Infrastructure
+
+# Solo se lanza a mano y exige escribir "destroy" para confirmar.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Escribe "destroy" para confirmar'
+        required: true
+        type: string
+
+# id-token: necesario para autenticarse en AWS con OIDC.
+# contents: solo lectura del repositorio (minimo privilegio).
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    # Si no se escribe exactamente "destroy", el job no se ejecuta.
+    if: ${{ inputs.confirm == 'destroy' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Credenciales temporales de AWS mediante OIDC (sin claves guardadas).
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::XXXXXXXXXXXX::role/role
+          aws-region: eu-north-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: terraform
+
+      # -auto-approve porque en un workflow no hay nadie para confirmar
+      # la seguridad ya la da la confirmacion manual del inicio.
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve
+        working-directory: terraform

@@ -1,0 +1,79 @@
+# CI/CD del backend: ejecuta los tests y, si pasan, despliega la infraestructura con Terraform.
+name: Deploy Backend
+
+on:
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'terraform/**'
+  #     - 'lmbda/**'
+  #     - 'test/**'
+  workflow_dispatch:
+
+# id-token: necesario para autenticarse en AWS con OIDC.
+# contents: solo lectura del repositorio (minimo privilegio).
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      actions: write
+
+    steps:
+      # 1. Descargar el repositorio
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # =========================
+      # CI
+      # =========================
+
+      # 2. Instalar Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # 3. Instalar dependencias de los tests
+      - name: Install dependencies
+        run: pip install boto3 pytest
+
+      # 4. Ejecutar tests. Si fallan, el workflow se detiene y no se despliega nada.
+      - name: Run tests
+        run: python -m pytest
+
+      # =========================
+      # CD
+      # =========================
+
+      # 5. Credenciales temporales de AWS mediante OIDC (sin claves guardadas)
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::XXXXXXXXXXXX::role/role
+          aws-region: eu-north-1
+
+      # 6. Instalar Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # 7. Inicializar Terraform (providers y estado)
+      - name: Terraform Init
+        run: terraform init
+        working-directory: terraform
+
+      # 8. Mostrar los cambios que se van a aplicar
+      - name: Terraform Plan
+        run: terraform plan
+        working-directory: terraform
+
+      # 9. Aplicar los cambios (-auto-approve: en un workflow no hay nadie para confirmar)
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: terraform

@@ -1,0 +1,52 @@
+# Despliega el frontend (archivos estaticos) en S3 e invalida la cache de CloudFront.
+name: Deploy Frontend
+
+on:
+   push:
+     branches:
+       - main
+     paths:
+       - 'frontend/**'
+   workflow_dispatch:
+
+# id-token: necesario para autenticarse en AWS con OIDC.
+# contents: solo lectura del repositorio (minimo privilegio).
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Credenciales temporales de AWS mediante OIDC, con un rol
+      # propio del frontend (solo S3, CloudFront y SSM).
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::XXXXXXXXXXXX::role/role
+          aws-region: eu-north-1
+
+      # Lee de Parameter Store el bucket y el ID de CloudFront, que cambian
+      # si la infraestructura se destruye y se vuelve a crear.
+      - name: Load config from SSM
+        run: |
+          P=/proyecto_aws_web
+          echo "BUCKET=$(aws ssm get-parameter --name $P/frontend_bucket --query Parameter.Value --output text)" >> $GITHUB_ENV
+          echo "CF_ID=$(aws ssm get-parameter --name $P/cloudfront_id --query Parameter.Value --output text)" >> $GITHUB_ENV
+
+      # Sube los archivos a S3. --delete borra lo que ya no exista en el repo.
+      - name: Deploy frontend to S3
+        run: aws s3 sync frontend "s3://$BUCKET" --delete
+
+      # Invalida la cache de CloudFront para que se sirva la version nueva.
+      - name: Invalidate CloudFront cache
+        if: github.event_name == 'push'
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$CF_ID" \
+            --paths "/*"

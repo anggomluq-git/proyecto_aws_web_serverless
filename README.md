@@ -37,7 +37,7 @@ La infraestructura se define mediante Terraform, mientras que el proceso de test
 
 ## Arquitectura
 
-![Arquitectura de la aplicación](arquitectura.png)
+![Arquitectura de la aplicación](esquema.png)
 
 1. El usuario accede a la pagina web a traves de CloudFront, que sirve los archivos estaticos desde S3.
 2. El frontend ejecuta JavaScript y realiza una peticion a la ruta relativa `/visitas` del mismo dominio.
@@ -112,9 +112,9 @@ A partir de ese momento, `Infrastructure` y `Frontend` se ejecutan automáticame
 
 - **OIDC para GitHub Actions y minimo privilegio:** los tres workflows (`Infrastructure`, `Frontend` y `Destroy`) utilizan GitHub Actions OIDC para obtener credenciales temporales de AWS mediante IAM Roles, evitando almacenar credenciales de AWS de larga duracion en GitHub. Los workflows `Infrastructure` y `Destroy` comparten un mismo rol, ya que Terraform necesita los mismos permisos para crear y destruir los recursos, mientras que `Frontend` utiliza un rol propio con unicamente los permisos necesarios para su tarea: sincronizar el bucket S3, invalidar CloudFront y leer sus parametros de Parameter Store, sin capacidad de crear ni destruir infraestructura. Ademas, la trust policy de cada IAM Role limita que repositorio de GitHub puede asumirlo, evitando que otros repositorios puedan utilizarlo.
 
--**Bucket S3 privado mediante CloudFront OAC:** el bucket utilizado para almacenar el frontend no permite acceso público directo. Se configura Origin Access Control (OAC) para que únicamente la distribución de CloudFront pueda acceder a los objetos de S3 y servirlos a los usuarios.
+- **Bucket S3 privado mediante CloudFront OAC:** el bucket utilizado para almacenar el frontend no permite acceso público directo. Se configura Origin Access Control (OAC) para que únicamente la distribución de CloudFront pueda acceder a los objetos de S3 y servirlos a los usuarios.
 
--**HTTPS mediante CloudFront:** se configura CloudFront para redirigir las peticiones HTTP a HTTPS, utilizando el certificado TLS proporcionado por CloudFront para cifrar las comunicaciones con los usuarios.
+- **HTTPS mediante CloudFront:** se configura CloudFront para redirigir las peticiones HTTP a HTTPS, utilizando el certificado TLS proporcionado por CloudFront para cifrar las comunicaciones con los usuarios.
 
 
 
